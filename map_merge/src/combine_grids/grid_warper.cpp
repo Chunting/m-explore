@@ -47,13 +47,28 @@ namespace internal
 cv::Rect GridWarper::warp(const cv::Mat& grid, const cv::Mat& transform,
                           cv::Mat& warped_grid)
 {
+  /** ROS_ASSERT asserts that the provided expression evaluates to
+ * true.  If it is false, program execution will abort, with an informative
+ * statement about which assertion failed, in what file.  Use ROS_ASSERT
+ * instead of assert() itself.
+ * Example usage:
+ */
   ROS_ASSERT(transform.type() == CV_64F);
   cv::Mat H;
+  // Inverts an affine transformation.
+  // The function computes an inverse affine transformation represented by 2 \times 3 matrix M :
   invertAffineTransform(transform.rowRange(0, 2), H);
   cv::Rect roi = warpRoi(grid, H);
   // shift top left corner for warp affine (otherwise the image is cropped)
   H.at<double>(0, 2) -= roi.tl().x;
   H.at<double>(1, 2) -= roi.tl().y;
+  /*
+. src: 输入图像
+. dst: 输出图像，尺寸由dsize指定，图像类型与原图像一致
+. M: 2X3的变换矩阵
+. dsize: 指定图像输出尺寸
+. flags: 插值算法标识符，有默认值INTER_LINEAR，如果插值算法为WARP_INVERSE_MAP, warpAffine函数使用如下矩阵进行图像转换 
+  */
   warpAffine(grid, warped_grid, H, roi.size(), cv::INTER_NEAREST,
              cv::BORDER_CONSTANT,
              cv::Scalar::all(255) /* this is -1 for signed char */);
@@ -64,6 +79,7 @@ cv::Rect GridWarper::warp(const cv::Mat& grid, const cv::Mat& transform,
 
 cv::Rect GridWarper::warpRoi(const cv::Mat& grid, const cv::Mat& transform)
 {
+  // Warper that maps an image onto the z = 1 plane
   cv::Ptr<cv::detail::PlaneWarper> warper =
       cv::makePtr<cv::detail::PlaneWarper>();
   cv::Mat H;

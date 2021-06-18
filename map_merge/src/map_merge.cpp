@@ -60,6 +60,7 @@ MapMerge::MapMerge() : subscriptions_size_(0)
                                 robot_map_updates_topic_, "map_updates");
   private_nh.param<std::string>("robot_namespace", robot_namespace_, "");
   private_nh.param<std::string>("merged_map_topic", merged_map_topic, "map");
+  // Frame id (in tf tree) which will be assigned to published merged map. This should be frame where you specified robot initial positions. 
   private_nh.param<std::string>("world_frame", world_frame_, "world");
 
   /* publishing */
@@ -119,15 +120,20 @@ void MapMerge::topicSubscribing()
     subscription.initial_pose = init_pose;
 
     /* subscribe callbacks */
-    map_topic = ros::names::append(robot_name, robot_map_topic_);
+    map_topic = ros::names::append(robot_name, robot_map_topic_);  //robot_1/map:robot_name + robot_map_topic
     map_updates_topic =
         ros::names::append(robot_name, robot_map_updates_topic_);
     ROS_INFO("Subscribing to MAP topic: %s.", map_topic.c_str());
+    
+    // Local map for specific robot. 
     subscription.map_sub = node_.subscribe<nav_msgs::OccupancyGrid>(
         map_topic, 50,
         [this, &subscription](const nav_msgs::OccupancyGrid::ConstPtr& msg) {
           fullMapUpdate(msg, subscription);
         });
+
+    // Local map updates for specific robot. Most of the nav_msgs/OccupancyGrid sources (mapping algorithms) provides incremental map updates via this topic 
+    // so they don't need to send always full map. This topic is optional.
     ROS_INFO("Subscribing to MAP updates topic: %s.",
              map_updates_topic.c_str());
     subscription.map_updates_sub =
@@ -142,6 +148,8 @@ void MapMerge::topicSubscribing()
 
 /*
  * mapMerging()
+ * check the map information from the local robots
+ * size, resolution, world frame, initial poses...
  */
 void MapMerge::mapMerging()
 {
@@ -157,6 +165,7 @@ void MapMerge::mapMerging()
         std::lock_guard<std::mutex> s_lock(subscription.mutex);
         grids.push_back(subscription.readonly_map);
         transforms.push_back(subscription.initial_pose);
+        // print out the map information
       }
     }
     // we don't need to lock here, because when have_initial_poses_ is true we
@@ -181,6 +190,7 @@ void MapMerge::mapMerging()
   merged_map->header.frame_id = world_frame_;
 
   ROS_ASSERT(merged_map->info.resolution > 0.f);
+  // Merged map from all robots in the system. 
   merged_map_publisher_.publish(merged_map);
 }
 
